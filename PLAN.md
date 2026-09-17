@@ -86,6 +86,9 @@ tool (bash) and responds with visual, interactive HTML.
 ### Near-term
 - [ ] Long-term agent memory (persistent facts/preferences across
       conversations, e.g. MEMORY.md the agent reads and updates)
+- [ ] Mobile-friendly interface (responsive layout / touch composer)
+- [ ] Cronjobs and triggered tasks/workflows (scheduled agent runs,
+      event-triggered actions)
 - [ ] Hide (soft-delete) conversations from the sidebar
 - [ ] Stable header dropdowns: model/reasoning selects keep their value
       without flashing blank while options load
