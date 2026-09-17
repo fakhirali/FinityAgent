@@ -100,4 +100,9 @@ def build_system_prompt() -> str:
         "- There is no background process facility; long-running servers will "
         "time out (120s default, 600s max).\n"
         "- Output is tail-capped at ~30k characters.\n"
+        "- Files you create in the working directory are served to the "
+        "browser at /files/<relative-path> — so HTML you emit can reference "
+        "them: generate a chart PNG with bash (e.g. python3 -c with "
+        "matplotlib), write it to ./chart.png, then reference it as "
+        "<img src=\"/files/chart.png\">.\n"
     )

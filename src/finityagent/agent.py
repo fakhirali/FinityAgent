@@ -89,8 +89,6 @@ class Agent:
                     stream=True,
                     **kwargs,
                 )
-                reasoning_buf = []
-                text_buf = []
                 for chunk in stream:
                     if self.cancel_flag.is_set():
                         stream.close()
@@ -103,29 +101,15 @@ class Agent:
                     reasoning = (getattr(delta, "reasoning_content", None)
                                  or getattr(delta, "reasoning", None))
                     if reasoning:
-                        reasoning_buf.append(reasoning)
-                        if len(reasoning_buf) >= 10:
-                            yield {"type": "reasoning_delta",
-                                   "text": "".join(reasoning_buf)}
-                            reasoning_buf = []
+                        yield {"type": "reasoning_delta", "text": reasoning}
                     if delta and delta.content:
                         assistant_text += delta.content
-                        text_buf.append(delta.content)
-                        if len(text_buf) >= 10:
-                            yield {"type": "text_delta",
-                                   "text": "".join(text_buf)}
-                            text_buf = []
+                        yield {"type": "text_delta", "text": delta.content}
                     if delta and delta.tool_calls:
                         before = len(calls)
                         _extract_tool_call_deltas(delta, calls)
                         for i in range(before, len(calls)):
                             call_order.append(i)
-                # flush tails
-                if reasoning_buf:
-                    yield {"type": "reasoning_delta",
-                           "text": "".join(reasoning_buf)}
-                if text_buf:
-                    yield {"type": "text_delta", "text": "".join(text_buf)}
             except Exception as e:
                 yield {"type": "error", "message": str(e)}
                 return messages

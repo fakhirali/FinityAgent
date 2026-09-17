@@ -1,4 +1,6 @@
 import json
+import threading
+import time
 
 from fasthtml.common import *
 from fasthtml.pico import picolink
@@ -261,9 +263,8 @@ def api_cancel(session_id: int):
 
 @app.post("/api/chat/{session_id}")
 def api_chat(session_id: int, message: str):
-    import asyncio
-    from starlette.responses import StreamingResponse
-
+    if session_id in turns and turns[session_id]["running"]:
+        return {"error": "a turn is already running in this conversation"}
     cfg = load_config()
     agent = agents.get(session_id)
     if agent is None:
@@ -271,7 +272,7 @@ def api_chat(session_id: int, message: str):
         agent = Agent(providers.make_client(cfg, session_id),
                       sess.model or cfg.model, sess.cwd,
                       reasoning_effort=cfg.reasoning_effort)
-        agents[session_id] = agent
+    agents[session_id] = agent
     agent.cancel_flag.clear()
     agent.model = cfg.model
     agent.reasoning_effort = cfg.reasoning_effort
@@ -288,19 +289,71 @@ def api_chat(session_id: int, message: str):
         db.update_session(session_id, title=message[:60])
     history.append({"role": "user", "content": message})
 
-    def sse():
-        yield sse_event("user_message", {"text": message})
-        final_html = ""
+    # turn runs in a background thread — independent of any browser
+    # connection, so switching chats or closing the tab doesn't kill it
+    turn = turns.setdefault(session_id, {
+        "events": [], "running": False,
+        "cond": threading.Condition()})
+    turn["events"] = []
+    turn["running"] = True
+    threading.Thread(target=_run_turn,
+                     args=(session_id, agent, history), daemon=True).start()
+    return {"ok": True, "user_message": message}
+
+
+turns: dict[int, dict] = {}
+
+
+def _run_turn(session_id: int, agent: Agent, history: list):
+    turn = turns[session_id]
+
+    def emit(etype: str, event: dict) -> None:
+        turn["events"].append((etype, event))
+        with turn["cond"]:
+            turn["cond"].notify_all()
+
+    try:
         for event in agent.run_turn(history):
             etype = event.pop("type")
             if etype == "html_response":
-                final_html = event.get("html", "")
-                db.add_message(session_id, "assistant", final_html,
-                               kind="html_response")
-            yield sse_event(etype, event)
-        yield sse_event("turn_complete", {})
+                db.add_message(session_id, "assistant",
+                               event.get("html", ""), kind="html_response")
+            emit(etype, event)
+    finally:
+        emit("turn_complete", {})
+        agents.pop(session_id, None)
+        turn["running"] = False
+        with turn["cond"]:
+            turn["cond"].notify_all()
+
+
+@app.get("/api/stream/{session_id}")
+def api_stream(session_id: int, since: int = 0):
+    # ponytail: 5Hz polling per open tab — trivial load, no missed events
+    def sse():
+        yield "retry: 1000\n\n"
+        idx = since
+        while True:
+            turn = turns.get(session_id)
+            if turn is None:
+                yield sse_event("turn_complete", {})
+                return
+            events = turn["events"]
+            while idx < len(events):
+                etype, event = events[idx]
+                idx += 1
+                yield sse_event(etype, event)
+            if not turn["running"] and idx >= len(turn["events"]):
+                return
+            time.sleep(0.2)
 
     return StreamingResponse(sse(), media_type="text/event-stream")
+
+
+@app.get("/api/turn-status/{session_id}")
+def api_turn_status(session_id: int):
+    turn = turns.get(session_id)
+    return {"running": bool(turn and turn["running"])}
 
 
 def sse_event(name: str, data: dict) -> str:
@@ -313,6 +366,18 @@ def static_files(fname: str):
     pkg = pathlib.Path(__file__).parent / "static"
     path = pkg / fname
     if not path.is_file():
+        return RedirectResponse("/", status_code=404)
+    return FileResponse(path)
+
+
+@app.get("/files/{fname:path}")
+def files(fname: str):
+    # ponytail: serves the launch directory as-is; the agent already has
+    # full shell access to it, so HTTP read access adds no new risk
+    import pathlib
+    root = pathlib.Path(_launch_cwd()).resolve()
+    path = (root / fname).resolve()
+    if not path.is_file() or not str(path).startswith(str(root)):
         return RedirectResponse("/", status_code=404)
     return FileResponse(path)
 

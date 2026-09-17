@@ -69,6 +69,9 @@ loadEffortOptions();
 
 // ---------- transcript replay ----------
 async function loadHistory() {
+  const status = await fetch(`/api/turn-status/${SESSION_ID}`)
+    .then(r => r.json()).catch(() => ({}));
+  if (status.running) startStream(0);
   const msgs = await fetch(`/api/messages/${SESSION_ID}`)
     .then(r => r.json()).then(d => d.messages || []).catch(() => []);
   for (const m of msgs) {
@@ -225,46 +228,56 @@ window.addEventListener("error", (ev) => {
   scroll();
 });
 
-// ---------- SSE consumption ----------
+// ---------- turn streaming ----------
+let eventSource = null;
+
 async function sendMessage(text, isWidget) {
   if (running || !text.trim()) return;
   running = true;
   sendBtn.disabled = true;
-  const cancelBtn = addCancelButton();
-  const ctx = { streamEl: null };
-
+  addCancelButton();
   toolPre = null;
   thinkingEl = null;
-  try {
-    const res = await fetch(`/api/chat/${SESSION_ID}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ message: text }),
-    });
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buf = "";
+  addUserMsg(text);
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      let idx;
-      while ((idx = buf.indexOf("\n\n")) !== -1) {
-        const raw = buf.slice(0, idx);
-        buf = buf.slice(idx + 2);
-        const ev = parseSse(raw);
-        if (ev) handleEvent(ev, ctx);
-      }
-    }
-  } catch (e) {
-    console.error(e);
-  } finally {
-    cancelBtn.remove();
-    running = false;
-    sendBtn.disabled = false;
-    input.focus();
+  const res = await fetch(`/api/chat/${SESSION_ID}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ message: text }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    addStreamText().textContent = "Error: " + (err.error || res.status);
+    finishTurn();
+    return;
   }
+  startStream(0);
+}
+
+function startStream(since) {
+  running = true;
+  sendBtn.disabled = true;
+  if (!document.getElementById("cancel")) addCancelButton();
+  eventSource = new EventSource(`/api/stream/${SESSION_ID}?since=${since}`);
+  for (const name of ["text_delta", "reasoning_delta", "tool_call",
+                      "tool_result", "approval_request", "html_response",
+                      "error", "turn_complete"]) {
+    eventSource.addEventListener(name, (e) => {
+      const payload = JSON.parse(e.data);
+      handleEvent({ event: name, payload }, {});
+      if (name === "turn_complete") finishTurn();
+    });
+  }
+  eventSource.onerror = () => {};
+}
+
+function finishTurn() {
+  if (eventSource) { eventSource.close(); eventSource = null; }
+  const b = document.getElementById("cancel");
+  if (b) b.remove();
+  running = false;
+  sendBtn.disabled = false;
+  input.focus();
 }
 
 function addCancelButton() {
@@ -365,6 +378,7 @@ function handleEvent(ev, ctx) {
       addStreamText().textContent = "Error: " + payload.message;
       break;
     case "turn_complete":
+      finishTurn();
       refreshSessions();
       break;
   }
