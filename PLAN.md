@@ -84,6 +84,8 @@ tool (bash) and responds with visual, interactive HTML.
 ## Not yet implemented
 
 ### Near-term
+- [ ] Queue messages while a turn is running (send into the running
+      conversation; agent processes them after the current turn finishes)
 - [ ] Long tool responses saved as files the agent can read (instead of
       only tail-capping output in context)
 - [ ] Long-term agent memory (persistent facts/preferences across
