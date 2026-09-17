@@ -90,9 +90,9 @@ def chat_shell(session_id: int, cfg: Config, cwd: str):
                 id="topbar"),
             Div(id="transcript"),
             Form(
-                Input(id="chat-input", autocomplete="off",
-                      placeholder="Ask anything — answers arrive as "
-                                  "interactive HTML"),
+                Textarea(id="chat-input", rows="1", autocomplete="off",
+                         placeholder="Ask anything — answers arrive as "
+                                     "interactive HTML"),
                 Button("Send", id="send", type="submit"),
                 id="composer"),
             id="main"),
@@ -156,7 +156,7 @@ def wizard_models(base_url: str, api_key: str = ""):
 @app.get("/api/models")
 def api_models():
     cfg = load_config()
-    return {"models": providers.list_models(cfg)}
+    return {"models": providers.list_models(cfg), "current": cfg.model}
 
 
 @app.post("/api/models/{model}")

@@ -106,7 +106,10 @@ body { margin: 0; height: 100%; }
   max-width: 900px; width: 100%; margin: 0 auto;
   border-top: 1px solid var(--muted-border-color, #2a2f42);
 }
-#chat-input { flex: 1; }
+#chat-input {
+  flex: 1; resize: none; overflow: hidden;
+  min-height: 44px; max-height: 160px; height: 44px;
+}
 #composer button { width: auto; }
 
 /* setup */

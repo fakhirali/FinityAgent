@@ -31,6 +31,9 @@ async function loadModels() {
     opt.value = m; opt.textContent = m;
     modelSwitcher.appendChild(opt);
   }
+  if (data.current && models.includes(data.current)) {
+    modelSwitcher.value = data.current;
+  }
 }
 modelSwitcher.onchange = async () => {
   await fetch(`/api/models/${encodeURIComponent(modelSwitcher.value)}`,
@@ -369,12 +372,16 @@ function handleEvent(ev, ctx) {
   return ctx;
 }
 
-// Shift+Enter makes a newline; Enter sends
+// Enter sends; Shift+Enter makes a newline
 input.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) {
     e.preventDefault();
     form.requestSubmit();
   }
+});
+input.addEventListener("input", () => {
+  input.style.height = "auto";
+  input.style.height = Math.min(input.scrollHeight, 160) + "px";
 });
 
 form.addEventListener("submit", (e) => {
