@@ -95,6 +95,10 @@ tool (bash) and responds with visual, interactive HTML.
       one-shot fragments
 - [ ] File uploads in the chat (drop files into the UI; agent gets the
       path, uploads land in ~/.finityagent/files/)
+- [ ] Platform env-var store (Hermes-style): agent can save credentials/
+      tokens for external platforms (e.g. TELEGRAM_TOKEN, GITHUB_TOKEN)
+      into ~/.finityagent/.env, wired into the system prompt so agent-built
+      integrations can connect to those platforms
 - [ ] Long tool responses saved as files the agent can read (instead of
       only tail-capping output in context)
 - [ ] Long-term agent memory (persistent facts/preferences across
