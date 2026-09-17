@@ -84,6 +84,12 @@ tool (bash) and responds with visual, interactive HTML.
 ## Not yet implemented
 
 ### Near-term
+- [ ] Loading indicators in the conversation sidebar showing which
+      conversations have a running agent
+- [ ] Overall UI polish pass
+- [ ] Improved skills access; user-initiated skills and slash commands
+      (e.g. `/skill: <name>`, custom commands)
+- [ ] Auto-send HTML render errors back to the agent so it can fix them
 - [ ] Background process facility (start/stop/monitor long-running
       commands, e.g. dev servers)
 - [ ] Richer widget protocol: multi-step forms — submit fires only after
@@ -94,6 +100,17 @@ tool (bash) and responds with visual, interactive HTML.
       repo-only install via `uv sync`)
 - [ ] Start-or-reattach: zero-arg invocation when a server already runs
       on the port (currently errors on port conflict)
+
+### Bugs
+- [ ] After a page refresh, replayed reasoning deltas update the first
+      Thinking block instead of the last one (thinkingEl is not reset per
+      replayed turn)
+
+### Explore
+- Give the agent access to (or the ability to create) backend endpoints,
+  so generated apps can serve dynamic content beyond static HTML — e.g.
+  agent-authored FastAPI routes mounted by the harness, server-side
+  compute, webhooks, live data streams
 
 ### V2 backlog
 - Configurable permission patterns in `~/.finityagent/config.toml`

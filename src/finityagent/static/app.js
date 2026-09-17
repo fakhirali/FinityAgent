@@ -341,6 +341,7 @@ function handleEvent(ev, ctx) {
     }
     case "tool_call":
       toolPre = addToolCard(payload.command, false);
+      thinkingEl = null;  // next reasoning gets a fresh block
       break;
     case "approval_request":
       addApprovalCard(payload.command);

@@ -14,6 +14,8 @@ def build_system_prompt() -> str:
         "- Don't use markdown. Every formatted response is HTML: "
         "<strong>, <ul><li>, <table>, <pre><code>, applications, "
         "visualizations, interactive elements.\n"
+        "- Match text color to background for legibility (never light text "
+        "on light backgrounds); the page is dark-themed.\n"
         "- The page already provides clean base styling — write as little "
         "extra CSS as possible, and scope it so it doesn't leak beyond your "
         "own content.\n"
