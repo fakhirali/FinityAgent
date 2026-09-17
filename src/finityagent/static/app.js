@@ -300,12 +300,11 @@ function handleEvent(ev, ctx) {
       break;
     case "text_delta":
       ctx.streamBuf = (ctx.streamBuf || "") + payload.text;
-      if (ctx.streamBuf.trimStart().startsWith("<")) {
-        // HTML fragment incoming — show progress, not raw source
-        if (!ctx.streamEl) ctx.streamEl = addStreamText();
+      if (!ctx.streamEl) ctx.streamEl = addStreamText();
+      // hide HTML content while it's being generated
+      if (ctx.streamBuf.includes("<")) {
         ctx.streamEl.textContent = "⏳ writing interactive response…";
       } else {
-        if (!ctx.streamEl) ctx.streamEl = addStreamText();
         ctx.streamEl.textContent = ctx.streamBuf;
       }
       scroll();
