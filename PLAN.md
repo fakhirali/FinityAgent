@@ -93,6 +93,8 @@ tool (bash) and responds with visual, interactive HTML.
 - [ ] Artifacts: persist agent HTML responses as named, editable objects
       the user and agent can iterate on (like Claude artifacts), instead of
       one-shot fragments
+- [ ] File uploads in the chat (drop files into the UI; agent gets the
+      path, uploads land in ~/.finityagent/files/)
 - [ ] Long tool responses saved as files the agent can read (instead of
       only tail-capping output in context)
 - [ ] Long-term agent memory (persistent facts/preferences across
