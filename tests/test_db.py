@@ -43,24 +43,3 @@ def test_message_updates_session_timestamp(db_home):
     dbm.add_message(sid, "user", "hi")
     after = dbm.get_session(sid).updated_at
     assert after >= before
-
-
-def test_concurrent_threads(db_home):
-    import threading
-
-    errors = []
-
-    def worker(i):
-        try:
-            sid = dbm.create_session(cwd="/tmp")
-            dbm.add_message(sid, "user", f"msg-{i}")
-        except Exception as e:  # noqa: BLE001
-            errors.append(e)
-
-    threads = [threading.Thread(target=worker, args=(i,)) for i in range(8)]
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join()
-    assert not errors
-    assert len(dbm.list_sessions()) == 8

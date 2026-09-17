@@ -84,6 +84,9 @@ tool (bash) and responds with visual, interactive HTML.
 ## Not yet implemented
 
 ### Near-term
+- [ ] Hide (soft-delete) conversations from the sidebar
+- [ ] Stable header dropdowns: model/reasoning selects keep their value
+      without flashing blank while options load
 - [ ] Loading indicators in the conversation sidebar showing which
       conversations have a running agent
 - [ ] Overall UI polish pass

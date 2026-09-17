@@ -77,8 +77,9 @@ def update_session(session_id: int, **fields) -> None:
 def add_message(session_id: int, role: str, content: str,
                 kind: str = "text", meta: str = "{}") -> int:
     _, messages = _tables()
-    row = messages.insert(session_id=session_id, role=role, content=content,
-                          kind=kind, meta=meta, created_at=time.time())
+    row = messages.insert(session_id=session_id, role=role,
+                          content=content, kind=kind, meta=meta,
+                          created_at=time.time())
     update_session(session_id)
     return row.id
 
