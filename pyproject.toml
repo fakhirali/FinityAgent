@@ -1,0 +1,29 @@
+[project]
+name = "finityagent"
+version = "0.1.0"
+description = "An agent harness with one tool (bash) that answers in interactive HTML"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+dependencies = [
+    "python-fasthtml>=0.14.0",
+    "openai>=1.50.0",
+    "httpx>=0.27.0",
+    "fastlite>=0.1.0",
+]
+
+[project.scripts]
+finityagent = "finityagent.__main__:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/finityagent"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+]
