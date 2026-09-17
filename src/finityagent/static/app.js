@@ -166,6 +166,8 @@ function scroll() {
 
 // ---------- HTML response rendering (direct DOM) ----------
 function renderHtml(html) {
+  // strip ```html / ``` fences if the model wraps fragments
+  html = html.replace(/^\s*```(?:html)?\s*\n?/, "").replace(/```\s*$/, "");
   const doc = new DOMParser().parseFromString(html, "text/html");
   const wrap = el("div", "agent-html");
   transcript.appendChild(wrap);
@@ -229,6 +231,7 @@ async function sendMessage(text, isWidget) {
   const ctx = { streamEl: null };
 
   toolPre = null;
+  thinkingEl = null;
   try {
     const res = await fetch(`/api/chat/${SESSION_ID}`, {
       method: "POST",
@@ -284,6 +287,8 @@ function parseSse(raw) {
   return { event, payload };
 }
 
+let thinkingEl = null;
+
 function handleEvent(ev, ctx) {
   const { payload } = ev;
   switch (ev.event) {
@@ -291,10 +296,32 @@ function handleEvent(ev, ctx) {
       addUserMsg(payload.text);
       break;
     case "text_delta":
-      if (!ctx.streamEl) ctx.streamEl = addStreamText();
-      ctx.streamEl.textContent += payload.text;
+      ctx.streamBuf = (ctx.streamBuf || "") + payload.text;
+      if (ctx.streamBuf.trimStart().startsWith("<")) {
+        // HTML fragment incoming — show progress, not raw source
+        if (!ctx.streamEl) ctx.streamEl = addStreamText();
+        ctx.streamEl.textContent = "⏳ writing interactive response…";
+      } else {
+        if (!ctx.streamEl) ctx.streamEl = addStreamText();
+        ctx.streamEl.textContent = ctx.streamBuf;
+      }
       scroll();
       break;
+    case "reasoning_delta": {
+      if (!thinkingEl) {
+        thinkingEl = el("details", "thinking");
+        const sum = el("summary");
+        sum.textContent = "Thinking";
+        const pre = el("pre");
+        thinkingEl.appendChild(sum);
+        thinkingEl.appendChild(pre);
+        transcript.appendChild(thinkingEl);
+      }
+      thinkingEl.querySelector("pre").textContent += payload.text;
+      thinkingEl.open = true;
+      scroll();
+      break;
+    }
     case "tool_call":
       toolPre = addToolCard(payload.command, false);
       break;
@@ -310,7 +337,27 @@ function handleEvent(ev, ctx) {
       ctx.streamEl = null;
       break;
     case "html_response":
-      if (payload.html) renderHtml(payload.html);
+      if (ctx.streamEl) { ctx.streamEl.remove(); ctx.streamEl = null; }
+      ctx.streamBuf = "";
+      if (thinkingEl) thinkingEl.open = false;
+      if (payload.html) {
+        // plain-text answers render as a normal message, not a fragment box
+        if (/<[a-z][\s\S]*>/i.test(payload.html)) renderHtml(payload.html);
+        else {
+          const wrap = el("div", "msg assistant");
+          const bubble = el("div", "bubble");
+          // safety net: models slip markdown into plain text — render it
+          let t = payload.html.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+          t = t.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+          t = t.replace(/\*([^*\n]+)\*/g, "<em>$1</em>");
+          t = t.replace(/`([^`\n]+)`/g, "<code>$1</code>");
+          t = t.replace(/^### (.*)$/gm, "<strong>$1</strong>");
+          bubble.innerHTML = t.replace(/\n/g, "<br>");
+          wrap.appendChild(bubble);
+          transcript.appendChild(wrap);
+          scroll();
+        }
+      }
       break;
     case "error":
       addStreamText().textContent = "Error: " + payload.message;
@@ -321,6 +368,14 @@ function handleEvent(ev, ctx) {
   }
   return ctx;
 }
+
+// Shift+Enter makes a newline; Enter sends
+input.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    form.requestSubmit();
+  }
+});
 
 form.addEventListener("submit", (e) => {
   e.preventDefault();

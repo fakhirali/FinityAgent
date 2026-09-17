@@ -43,6 +43,10 @@ body { margin: 0; height: 100%; }
   border-radius: 12px; padding: 10px 14px; max-width: 80%;
 }
 .msg.widget { display: flex; justify-content: flex-end; }
+.msg.assistant .bubble {
+  background: var(--pico-card-background-color, #1e2230);
+  border-radius: 12px; padding: 10px 14px; max-width: 80%;
+}
 .msg.widget .bubble {
   border-radius: 12px; padding: 10px 14px;
   font-family: ui-monospace, monospace; font-size: 12px;
@@ -121,5 +125,21 @@ body { margin: 0; height: 100%; }
   border: 1px solid var(--pico-danger, #ff6c6c);
   font-family: ui-monospace, monospace; font-size: 12px;
 }
+.thinking {
+  width: 100%; max-width: 860px; margin: 4px 24px;
+  border: 1px solid var(--muted-border-color, #2a2f42);
+  border-radius: 8px;
+}
+.thinking summary {
+  padding: 6px 12px; cursor: pointer;
+  color: var(--muted-color, #8b91a7); font-size: 12px;
+}
+.thinking pre {
+  margin: 0; padding: 10px 12px; font-size: 12px;
+  max-height: 240px; overflow: auto; white-space: pre-wrap;
+  font-family: ui-monospace, monospace;
+  color: var(--muted-color, #8b91a7);
+}
+
 .muted { color: var(--muted-color, #8b91a7); }
 .error { color: var(--pico-danger, #ff6c6c); }

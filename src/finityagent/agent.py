@@ -96,6 +96,9 @@ class Agent:
                     if not chunk.choices:
                         continue
                     delta = chunk.choices[0].delta
+                    reasoning = getattr(delta, "reasoning_content", None)
+                    if reasoning:
+                        yield {"type": "reasoning_delta", "text": reasoning}
                     if delta and delta.content:
                         assistant_text += delta.content
                         yield {"type": "text_delta", "text": delta.content}
