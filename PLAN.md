@@ -86,6 +86,8 @@ tool (bash) and responds with visual, interactive HTML.
 ### Near-term
 - [ ] Queue messages while a turn is running (send into the running
       conversation; agent processes them after the current turn finishes)
+- [ ] Compaction for context compression (summarize old turns into a
+      compact summary to keep long sessions within the context window)
 - [ ] Long tool responses saved as files the agent can read (instead of
       only tail-capping output in context)
 - [ ] Long-term agent memory (persistent facts/preferences across
