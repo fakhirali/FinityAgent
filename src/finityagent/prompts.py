@@ -51,7 +51,10 @@ def build_system_prompt() -> str:
         "Legibility: if you give a container a light background, give its "
         "text a dark color — never light text on light backgrounds. Put "
         "button rows in a flex row with spacing above them so they don't hug "
-        "the content above.\n\n"
+        "the content above. For slider rows, wrap the value display in a "
+        "fixed-width element (width: 6em, text-align: right, "
+        "font-variant-numeric: tabular-nums) so changing values never shift "
+        "the layout.\n\n"
         "# Sending data back to the chat\n"
         "Elements in your HTML can submit data back to the conversation:\n"
         '- <form data-send> ... </form> — when submitted, all named fields are '

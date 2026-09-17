@@ -69,6 +69,13 @@ body { margin: 0; height: 100%; }
 }
 .agent-html button[data-send],
 .agent-html form[data-send] { margin-top: 14px; }
+/* slider value displays: fixed width so numbers changing don't reflow */
+.agent-html output,
+.agent-html .value,
+.agent-html .val {
+  display: inline-block; min-width: 6ch; text-align: right;
+  font-variant-numeric: tabular-nums;
+}
 .agent-html .btn-row {
   display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px;
 }
