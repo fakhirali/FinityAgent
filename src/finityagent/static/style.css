@@ -67,8 +67,7 @@ body { margin: 0; height: 100%; }
   line-height: 1.6;
   color-scheme: dark;
 }
-.agent-html button[data-send],
-.agent-html form[data-send] { margin-top: 14px; }
+.agent-html button { margin-top: 14px; }
 /* slider value displays: fixed width so numbers changing don't reflow */
 .agent-html output,
 .agent-html .value,

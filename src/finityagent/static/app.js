@@ -304,6 +304,8 @@ function parseSse(raw) {
 }
 
 let thinkingEl = null;
+let streamEl = null;
+let streamBuf = "";
 
 function handleEvent(ev, ctx) {
   const { payload } = ev;
@@ -312,13 +314,13 @@ function handleEvent(ev, ctx) {
       addUserMsg(payload.text);
       break;
     case "text_delta":
-      ctx.streamBuf = (ctx.streamBuf || "") + payload.text;
-      if (!ctx.streamEl) ctx.streamEl = addStreamText();
+      streamBuf += payload.text;
+      if (!streamEl) streamEl = addStreamText();
       // hide HTML content while it's being generated
-      if (ctx.streamBuf.includes("<")) {
-        ctx.streamEl.textContent = "⏳ writing interactive response…";
+      if (streamBuf.includes("<")) {
+        streamEl.textContent = "⏳ writing interactive response…";
       } else {
-        ctx.streamEl.textContent = ctx.streamBuf;
+        streamEl.textContent = streamBuf;
       }
       scroll();
       break;
@@ -349,11 +351,11 @@ function handleEvent(ev, ctx) {
         toolPre.parentElement.open = payload.blocked;
       }
       toolPre = null;
-      ctx.streamEl = null;
+      streamEl = null;
       break;
     case "html_response":
-      if (ctx.streamEl) { ctx.streamEl.remove(); ctx.streamEl = null; }
-      ctx.streamBuf = "";
+      if (streamEl) { streamEl.remove(); streamEl = null; }
+      streamBuf = "";
       if (thinkingEl) thinkingEl.open = false;
       if (payload.html) {
         // plain-text answers render as a normal message, not a fragment box

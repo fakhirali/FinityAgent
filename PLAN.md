@@ -90,6 +90,8 @@ finityagent/
 
 ## V2 backlog
 
+- Richer widget protocol: multi-step forms — submit fires only after the user has selected all options / clicked submit, not per button
+- Web search as a first-class skill with per-provider backends (SearXNG, Brave, Exa keys)
 - Background process facility (start/stop/monitor long-running commands, e.g. dev servers)
 - Configurable permission patterns in `~/.finityagent/config.toml` (full allow/deny rule engine)
 - OS-level sandboxing (sandbox-exec/Seatbelt, bubblewrap)

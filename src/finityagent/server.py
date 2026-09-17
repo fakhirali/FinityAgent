@@ -1,6 +1,7 @@
 import json
 import threading
 import time
+from pathlib import Path
 
 from fasthtml.common import *
 from fasthtml.pico import picolink
@@ -13,6 +14,9 @@ from .config import PRESETS, Config, load_config, save_config
 app = FastHTML(hdrs=(picolink,
                      Link(rel="stylesheet", href="/static/style.css")),
                htmlkw={"data-theme": "dark"})
+
+FINITY_FILES_DIR = Path.home() / ".finityagent" / "files"
+FINITY_FILES_DIR.mkdir(parents=True, exist_ok=True)
 
 agents: dict[int, Agent] = {}
 
@@ -134,11 +138,6 @@ def _launch_cwd() -> str:
 @app.get("/api/sessions-list")
 def api_sessions_list():
     return [Li(s.title, data_sid=str(s.id)) for s in db.list_sessions()]
-
-
-@app.get("/api/sessions")
-def api_sessions():
-    return [{"id": s.id, "title": s.title} for s in db.list_sessions()]
 
 
 @app.get("/api/messages/{session_id}")
@@ -372,10 +371,9 @@ def static_files(fname: str):
 
 @app.get("/files/{fname:path}")
 def files(fname: str):
-    # ponytail: serves the launch directory as-is; the agent already has
-    # full shell access to it, so HTTP read access adds no new risk
-    import pathlib
-    root = pathlib.Path(_launch_cwd()).resolve()
+    # ponytail: one global files dir the agent explicitly copies assets
+    # into; serving the whole cwd was broader than needed
+    root = FINITY_FILES_DIR
     path = (root / fname).resolve()
     if not path.is_file() or not str(path).startswith(str(root)):
         return RedirectResponse("/", status_code=404)
