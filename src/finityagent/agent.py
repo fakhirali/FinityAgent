@@ -96,7 +96,10 @@ class Agent:
                     if not chunk.choices:
                         continue
                     delta = chunk.choices[0].delta
-                    reasoning = getattr(delta, "reasoning_content", None)
+                    # ponytail: different providers expose reasoning as
+                    # reasoning_content (DeepSeek) or reasoning (Kimi/GLM)
+                    reasoning = (getattr(delta, "reasoning_content", None)
+                                 or getattr(delta, "reasoning", None))
                     if reasoning:
                         yield {"type": "reasoning_delta", "text": reasoning}
                     if delta and delta.content:
