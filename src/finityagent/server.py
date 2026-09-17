@@ -371,11 +371,13 @@ def static_files(fname: str):
 
 @app.get("/files/{fname:path}")
 def files(fname: str):
-    # ponytail: one global files dir the agent explicitly copies assets
-    # into; serving the whole cwd was broader than needed
-    root = FINITY_FILES_DIR
-    path = (root / fname).resolve()
-    if not path.is_file() or not str(path).startswith(str(root)):
+    # ponytail: serves ~/.finityagent/files/ plus anything the agent
+    # symlinks into it (no copies for big files); ".." is rejected so
+    # traversal stays blocked
+    if ".." in fname.split("/") or fname.startswith("/"):
+        return RedirectResponse("/", status_code=404)
+    path = FINITY_FILES_DIR / fname
+    if not path.is_file():
         return RedirectResponse("/", status_code=404)
     return FileResponse(path)
 
