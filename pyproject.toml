@@ -8,7 +8,6 @@ license = "MIT"
 dependencies = [
     "python-fasthtml>=0.14.0",
     "openai>=1.50.0",
-    "httpx>=0.27.0",
     "fastlite>=0.1.0",
 ]
 

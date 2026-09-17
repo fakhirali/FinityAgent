@@ -1,5 +1,5 @@
-const sessionEl = document.body;
-const SESSION_ID = Number(sessionEl.dataset.session);
+// ponytail: session id lives in the URL, no need for server-rendered attrs
+const SESSION_ID = Number(location.pathname.split("/").pop()) || null;
 const transcript = document.getElementById("transcript");
 const form = document.getElementById("composer");
 const input = document.getElementById("chat-input");
@@ -10,30 +10,21 @@ const showTools = document.getElementById("show-tools");
 const sessionList = document.getElementById("session-list");
 
 let running = false;
-let pendingApprovalId = null;
-const cancellers = new Set();
-const IFRAME_RUNTIME_SRC = "/static/iframe-runtime.js";
+let toolPre = null;
 
-// ---------- sessions sidebar ----------
-async function loadSessions() {
-  const res = await fetch("/api/sessions");
-  const sessions = await res.json();
-  sessionList.innerHTML = "";
-  for (const s of sessions) {
-    const li = document.createElement("li");
-    li.textContent = s.title;
-    if (s.id === SESSION_ID) li.classList.add("active");
-    li.onclick = () => { location.href = "/chat/" + s.id; };
-    sessionList.appendChild(li);
-  }
-}
+// ---------- sessions sidebar (HTMX-rendered <li>s) ----------
+document.addEventListener("click", (e) => {
+  const li = e.target.closest("#session-list li");
+  if (li) location.href = "/chat/" + li.dataset.sid;
+});
 document.getElementById("new-chat").onclick = () => { location.href = "/"; };
-loadSessions();
+function refreshSessions() { htmx.trigger(document.body, "finity:refresh"); }
 
 // ---------- model switcher ----------
 async function loadModels() {
   const res = await fetch("/api/models");
-  const models = await res.json();
+  const data = await res.json();
+  const models = data.models || [];
   modelSwitcher.innerHTML = "";
   for (const m of models) {
     const opt = document.createElement("option");
@@ -44,8 +35,51 @@ async function loadModels() {
 modelSwitcher.onchange = async () => {
   await fetch(`/api/models/${encodeURIComponent(modelSwitcher.value)}`,
               { method: "POST" });
+  loadEffortOptions();
 };
 loadModels();
+
+const effortSwitcher = document.getElementById("effort-switcher");
+effortSwitcher.onchange = async () => {
+  await fetch(`/api/effort/${effortSwitcher.value}`, { method: "POST" });
+};
+fetch("/api/effort").then(r => r.json()).then(d => {
+  effortSwitcher.value = d.effort || "default";
+});
+
+async function loadEffortOptions() {
+  const data = await fetch("/api/reasoning-options")
+    .then(r => r.json()).catch(() => ({}));
+  const options = data.options || [];
+  if (!options.length) return;
+  const current = effortSwitcher.value;
+  effortSwitcher.innerHTML = "";
+  for (const o of options) {
+    const opt = document.createElement("option");
+    opt.value = o;
+    opt.textContent = o === "default" ? "Reasoning: default" : "Reasoning: " + o;
+    effortSwitcher.appendChild(opt);
+  }
+  effortSwitcher.value = options.includes(current) ? current : options[0];
+}
+loadEffortOptions();
+
+// ---------- transcript replay ----------
+async function loadHistory() {
+  const msgs = await fetch(`/api/messages/${SESSION_ID}`)
+    .then(r => r.json()).then(d => d.messages || []).catch(() => []);
+  for (const m of msgs) {
+    if (m.role === "user") addUserMsg(m.content);
+    else if (m.kind === "html_response" && m.content) renderHtml(m.content);
+  }
+}
+loadHistory();
+
+autoMode.onchange = () =>
+  fetch(`/api/auto/${SESSION_ID}?on=${autoMode.checked}`, { method: "POST" });
+fetch("/api/auto").then(r => r.json()).then(d => {
+  autoMode.checked = !!d.auto;
+});
 
 // ---------- transcript rendering ----------
 function el(tag, cls) {
@@ -125,49 +159,66 @@ function cmdPrefix(command) {
 }
 
 function scroll() {
-  transcript.scrollTop = transcript.scrollHeight;
+  const near = transcript.scrollHeight - transcript.scrollTop -
+    transcript.clientHeight < 120;
+  if (near) transcript.scrollTop = transcript.scrollHeight;
 }
 
-// ---------- iframe rendering ----------
+// ---------- HTML response rendering (direct DOM) ----------
 function renderHtml(html) {
-  const wrap = el("div", "html-frame-wrap");
-  const frame = document.createElement("iframe");
-  frame.setAttribute("sandbox", "allow-scripts allow-forms");
-  frame.style.height = "480px";
-  wrap.appendChild(frame);
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const wrap = el("div", "agent-html");
   transcript.appendChild(wrap);
-  const doc = frame.contentDocument;
-  doc.open();
-  doc.write(injectRuntime(html));
-  doc.close();
+  doc.querySelectorAll("style, link[rel=stylesheet]").forEach((n) =>
+    wrap.appendChild(document.importNode(n, true)));
+  doc.body.childNodes.forEach((n) =>
+    wrap.appendChild(document.importNode(n, true)));
+  // scripts don't execute via importNode — re-create them, wrapped so
+  // multiple responses don't collide in the page's global scope
+  doc.body.querySelectorAll("script").forEach((old) => {
+    const sc = document.createElement("script");
+    for (const a of old.attributes) sc.setAttribute(a.name, a.value);
+    sc.textContent = "(function(){\n" + old.textContent + "\n})();";
+    wrap.appendChild(sc);
+  });
+  if (window.htmx) htmx.process(wrap);
   scroll();
 }
 
-function injectRuntime(html) {
-  const tag = `<script src="${IFRAME_RUNTIME_SRC}"></script>`;
-  if (/<\/body>/i.test(html)) return html.replace(/<\/body>/i, tag + "</body>");
-  return html + tag;
+// ---------- data-send bridge (delegated) ----------
+function widgetSubmit(payload) {
+  addWidgetMsg(JSON.stringify(payload));
+  if (!running) sendMessage(JSON.stringify(payload), true);
 }
 
-window.addEventListener("message", (ev) => {
-  if (ev.data && ev.data.type === "finity:resize") {
-    const frame = document.querySelector(`iframe[data-fid="${ev.data.fid}"]`);
-    if (frame && ev.data.height) frame.style.height = ev.data.height + "px";
-  }
-  if (ev.data && ev.data.type === "finity:send") {
-    addWidgetMsg(JSON.stringify(ev.data.payload));
-    if (!running) sendMessage(JSON.stringify(ev.data.payload), true);
-  }
+transcript.addEventListener("submit", (e) => {
+  const form = e.target.closest("form[data-send]");
+  if (!form) return;
+  e.preventDefault();
+  const payload = {};
+  new FormData(form).forEach((v, k) => { payload[k] = v; });
+  widgetSubmit(payload);
 });
 
-// assign frame ids so runtime resize messages can find frames
-const origRender = renderHtml;
-renderHtml = function (html) {
-  const before = transcript.querySelectorAll("iframe").length;
-  origRender(html);
-  const frames = transcript.querySelectorAll("iframe");
-  frames[before].dataset.fid = String(before);
-};
+transcript.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-send]");
+  if (!btn || btn.tagName === "FORM") return;
+  e.preventDefault();
+  let payload;
+  const raw = btn.getAttribute("data-send");
+  if (raw) {
+    try { payload = JSON.parse(raw); } catch { payload = { value: raw }; }
+  }
+  widgetSubmit(payload);
+});
+
+// surface agent script errors
+window.addEventListener("error", (ev) => {
+  const chip = el("div", "iframe-error");
+  chip.textContent = "Script error in response: " + ev.message;
+  transcript.appendChild(chip);
+  scroll();
+});
 
 // ---------- SSE consumption ----------
 async function sendMessage(text, isWidget) {
@@ -175,8 +226,9 @@ async function sendMessage(text, isWidget) {
   running = true;
   sendBtn.disabled = true;
   const cancelBtn = addCancelButton();
-  let streamEl = null;
+  const ctx = { streamEl: null };
 
+  toolPre = null;
   try {
     const res = await fetch(`/api/chat/${SESSION_ID}`, {
       method: "POST",
@@ -196,8 +248,7 @@ async function sendMessage(text, isWidget) {
         const raw = buf.slice(0, idx);
         buf = buf.slice(idx + 2);
         const ev = parseSse(raw);
-        if (!ev) continue;
-        ({ streamEl } = handleEvent(ev, { streamEl, cancelBtn }));
+        if (ev) handleEvent(ev, ctx);
       }
     }
   } catch (e) {
@@ -244,22 +295,19 @@ function handleEvent(ev, ctx) {
       ctx.streamEl.textContent += payload.text;
       scroll();
       break;
-    case "tool_call": {
-      ctx.toolPre = addToolCard(payload.command, false);
+    case "tool_call":
+      toolPre = addToolCard(payload.command, false);
       break;
-    }
     case "approval_request":
       addApprovalCard(payload.command);
       break;
     case "tool_result":
-      if (ctx.toolPre) {
-        ctx.toolPre.textContent = payload.output;
-        ctx.toolPre.parentElement.open = payload.blocked;
-      } else {
-        addToolCard("(earlier command)", payload.blocked);
+      if (toolPre) {
+        toolPre.textContent = payload.output;
+        toolPre.parentElement.open = payload.blocked;
       }
-      ctx.toolPre = null;
-      if (ctx.streamEl) { ctx.streamEl = null; }
+      toolPre = null;
+      ctx.streamEl = null;
       break;
     case "html_response":
       if (payload.html) renderHtml(payload.html);
@@ -268,7 +316,7 @@ function handleEvent(ev, ctx) {
       addStreamText().textContent = "Error: " + payload.message;
       break;
     case "turn_complete":
-      loadSessions();
+      refreshSessions();
       break;
   }
   return ctx;

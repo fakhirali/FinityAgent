@@ -34,6 +34,8 @@ class Config:
     api_key: str = ""
     model: str = ""
     preset: str = "custom"
+    reasoning_effort: str = "default"  # default|low|medium|high
+    auto_approve: bool = False
     extra: dict = field(default_factory=dict)
 
     @property
@@ -50,8 +52,11 @@ def load_config() -> Config:
         base_url=data.get("base_url", ""),
         model=data.get("model", ""),
         preset=data.get("preset", "custom"),
+        reasoning_effort=data.get("reasoning_effort", "default"),
+        auto_approve=data.get("auto_approve", False),
         extra={k: v for k, v in data.items()
-               if k not in ("base_url", "api_key", "model", "preset")},
+               if k not in ("base_url", "api_key", "model", "preset",
+                            "reasoning_effort", "auto_approve")},
     )
     cfg.api_key = os.environ.get("FINITYAGENT_API_KEY", data.get("api_key", ""))
     return cfg
@@ -60,7 +65,9 @@ def load_config() -> Config:
 def save_config(cfg: Config) -> None:
     FINITY_DIR.mkdir(parents=True, exist_ok=True)
     doc = {"base_url": cfg.base_url, "api_key": cfg.api_key,
-           "model": cfg.model, "preset": cfg.preset}
+           "model": cfg.model, "preset": cfg.preset,
+           "reasoning_effort": cfg.reasoning_effort,
+           "auto_approve": cfg.auto_approve}
     doc.update(cfg.extra)
     lines = []
     for key, value in doc.items():

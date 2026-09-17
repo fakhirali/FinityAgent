@@ -1,21 +1,22 @@
 import json
 
 from fasthtml.common import *
+from fasthtml.pico import picolink
 from starlette.responses import FileResponse, StreamingResponse
 
 from . import db, providers
 from .agent import Agent
 from .config import PRESETS, Config, load_config, save_config
 
-app = FastHTML(pico=False, default_hdrs=False,
-               hdrs=(Link(rel="stylesheet", href="/static/style.css"),))
+app = FastHTML(hdrs=(picolink,
+                     Link(rel="stylesheet", href="/static/style.css")),
+               htmlkw={"data-theme": "dark"})
 
 agents: dict[int, Agent] = {}
 
 
 def _head(title):
-    return (Title(title),
-            Link(rel="stylesheet", href="/static/style.css"))
+    return (Title(title),)
 
 
 # ---------- wizard ----------
@@ -24,7 +25,7 @@ def wizard_page(error: str = ""):
     options = [Option(v["label"], value=k, selected=(k == "opencode-go"))
                for k, v in PRESETS.items()]
     err = P(error, cls="error") if error else None
-    return _head("FinityAgent Setup"), Div(
+    card = Div(
         H1("FinityAgent"),
         P("One tool. Bash. Interactive HTML answers.", cls="muted"),
         Form(
@@ -37,13 +38,13 @@ def wizard_page(error: str = ""):
             Input(name="api_key", id="api_key", type="password",
                   required=True, placeholder="paste your API key"),
             Label("Model"),
-            Input(name="model", id="model", required=True,
-                  placeholder="kimi-k3"),
+            Select(name="model", id="model", required=True),
             Button("Start", type="submit"),
             err,
             action="/setup", method="post", id="setup-form"),
         Script(src="/static/wizard.js"),
         cls="setup-card")
+    return _head("FinityAgent Setup"), Div(card, cls="setup-center")
 
 
 @app.get("/setup")
@@ -62,14 +63,24 @@ def setup_post(preset: str, base_url: str, api_key: str, model: str):
 # ---------- chat page ----------
 
 def chat_shell(session_id: int, cfg: Config, cwd: str):
-    return _head("FinityAgent"), Div(
+    return Title("FinityAgent"), Div(
         Aside(
             Button("+ New chat", id="new-chat"),
-            Ul(id="session-list"),
+            # HTMX loads and refreshes the list; server renders the <li>s
+            Ul(id="session-list",
+               hx_get="/api/sessions-list", hx_trigger="load, finity:refresh from:body",
+               hx_swap="innerHTML"),
             id="sidebar"),
         Main(
             Header(
-                Div(Select(id="model-switcher"), id="model-switcher-wrap"),
+                Div(Select(id="model-switcher"),
+                    Select(
+                        Option("Default", value="default", selected=True),
+                        Option("Reasoning: low", value="low"),
+                        Option("Reasoning: medium", value="medium"),
+                        Option("Reasoning: high", value="high"),
+                        id="effort-switcher"),
+                    id="model-switcher-wrap"),
                 Div(
                     Label(Input(type="checkbox", id="auto-mode"), " Auto",
                           cls="switch"),
@@ -85,17 +96,8 @@ def chat_shell(session_id: int, cfg: Config, cwd: str):
                 Button("Send", id="send", type="submit"),
                 id="composer"),
             id="main"),
-        id="app") + (
         Script(src="/static/app.js"),
-        Body_attrs(session=str(session_id), cwd=cwd))
-
-
-def Body_attrs(**attrs):
-    """Attach data attributes to <body> via a marker script."""
-    import json as _json
-    data = _json.dumps(attrs)
-    return Script(f"document.body.dataset = Object.assign("
-                  f"document.body.dataset, {data});")
+        id="app")
 
 
 @app.get("/")
@@ -105,7 +107,8 @@ def index():
         return RedirectResponse("/setup", status_code=303)
     cwd = _launch_cwd()
     session_id = db.create_session(cwd=cwd, model=cfg.model)
-    return chat_shell(session_id, cfg, cwd)
+    # ponytail: one URL = one session id; app.js reads it from the path
+    return RedirectResponse(f"/chat/{session_id}", status_code=303)
 
 
 @app.get("/chat/{session_id}")
@@ -126,6 +129,11 @@ def _launch_cwd() -> str:
 
 # ---------- API ----------
 
+@app.get("/api/sessions-list")
+def api_sessions_list():
+    return [Li(s.title, data_sid=str(s.id)) for s in db.list_sessions()]
+
+
 @app.get("/api/sessions")
 def api_sessions():
     return [{"id": s.id, "title": s.title} for s in db.list_sessions()]
@@ -133,14 +141,22 @@ def api_sessions():
 
 @app.get("/api/messages/{session_id}")
 def api_messages(session_id: int):
-    return [{"role": m.role, "content": m.content, "kind": m.kind,
-             "meta": m.meta} for m in db.get_messages(session_id)]
+    return {"messages": [
+        {"role": m.role, "content": m.content, "kind": m.kind, "meta": m.meta}
+        for m in db.get_messages(session_id)]}
+
+
+@app.get("/api/wizard-models")
+def wizard_models(base_url: str, api_key: str = ""):
+    cfg = Config(base_url=base_url.strip(), api_key=api_key.strip(),
+                 model="", preset="custom")
+    return {"models": providers.list_models(cfg)}
 
 
 @app.get("/api/models")
 def api_models():
     cfg = load_config()
-    return providers.list_models(cfg)
+    return {"models": providers.list_models(cfg)}
 
 
 @app.post("/api/models/{model}")
@@ -148,7 +164,68 @@ def api_set_model(model: str):
     cfg = load_config()
     cfg.model = model
     save_config(cfg)
+    for agent in agents.values():
+        agent.model = model
     return {"ok": True}
+
+
+@app.get("/api/reasoning-options")
+def reasoning_options():
+    # ponytail: levels come from models.dev (what OpenCode uses); unknown
+    # providers get the generic OpenAI ladder. toggle/budget_tokens variants
+    # are V2 — effort-only for now.
+    cfg = load_config()
+    fallback = ["default", "low", "medium", "high"]
+    pid = _provider_id(cfg)
+    if not pid:
+        return {"options": fallback}
+    try:
+        m = _models_dev()[pid]["models"].get(cfg.model, {})
+        efforts = [o.get("values", []) for o in m.get("reasoning_options", [])
+                   if o.get("type") == "effort"]
+    except Exception:  # noqa: BLE001 - offline or unknown provider
+        return {"options": fallback}
+    values = efforts[0] if efforts else []
+    return {"options": ["default", *dict.fromkeys(values)]}
+
+
+_md_cache = None
+
+
+def _models_dev():
+    global _md_cache
+    if _md_cache is None:
+        import urllib.request
+        req = urllib.request.Request(
+            "https://models.dev/api.json",
+            headers={"User-Agent": "finityagent/0.1"})
+        with urllib.request.urlopen(req, timeout=15) as r:
+            _md_cache = json.load(r)
+    return _md_cache
+
+
+def _provider_id(cfg) -> str | None:
+    if "opencode.ai/zen" in cfg.base_url:
+        return "opencode-go"
+    if "api.openai.com" in cfg.base_url:
+        return "openai"
+    return None
+
+
+@app.post("/api/effort/{level}")
+def api_set_effort(level: str):
+    cfg = load_config()
+    if level in ("default", "low", "medium", "high"):
+        cfg.reasoning_effort = level
+        save_config(cfg)
+    for agent in agents.values():
+        agent.reasoning_effort = level
+    return {"ok": True}
+
+
+@app.get("/api/effort")
+def api_get_effort():
+    return {"effort": load_config().reasoning_effort}
 
 
 @app.post("/api/approve/{session_id}")
@@ -157,6 +234,21 @@ def api_approve(session_id: int, decision: str, prefix: str = ""):
     if agent:
         agent.resolve_approval(decision, prefix or None)
     return {"ok": True}
+
+
+@app.post("/api/auto/{session_id}")
+def api_auto(session_id: int, on: bool = False):
+    cfg = load_config()
+    cfg.auto_approve = on
+    save_config(cfg)
+    for agent in agents.values():
+        agent.auto_approve = on
+    return {"ok": True}
+
+
+@app.get("/api/auto")
+def api_get_auto():
+    return {"auto": load_config().auto_approve}
 
 
 @app.post("/api/cancel/{session_id}")
@@ -176,10 +268,14 @@ def api_chat(session_id: int, message: str):
     agent = agents.get(session_id)
     if agent is None:
         sess = db.get_session(session_id)
-        agent = Agent(providers.make_client(cfg),
-                      sess.model or cfg.model, sess.cwd)
+        agent = Agent(providers.make_client(cfg, session_id),
+                      sess.model or cfg.model, sess.cwd,
+                      reasoning_effort=cfg.reasoning_effort)
         agents[session_id] = agent
     agent.cancel_flag.clear()
+    agent.model = cfg.model
+    agent.reasoning_effort = cfg.reasoning_effort
+    agent.auto_approve = cfg.auto_approve
 
     history = [
         {"role": m.role, "content": m.content}
@@ -188,6 +284,8 @@ def api_chat(session_id: int, message: str):
         and m.kind in ("text", "html_response")
     ]
     db.add_message(session_id, "user", message)
+    if db.get_session(session_id).title == "New chat":
+        db.update_session(session_id, title=message[:60])
     history.append({"role": "user", "content": message})
 
     def sse():
@@ -197,11 +295,9 @@ def api_chat(session_id: int, message: str):
             etype = event.pop("type")
             if etype == "html_response":
                 final_html = event.get("html", "")
-                event["html"] = ""
+                db.add_message(session_id, "assistant", final_html,
+                               kind="html_response")
             yield sse_event(etype, event)
-        if final_html:
-            db.add_message(session_id, "assistant", final_html,
-                           kind="html_response")
         yield sse_event("turn_complete", {})
 
     return StreamingResponse(sse(), media_type="text/event-stream")

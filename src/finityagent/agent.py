@@ -30,10 +30,14 @@ def _extract_tool_call_deltas(delta, accumulator: dict):
 
 
 class Agent:
-    def __init__(self, client: OpenAI, model: str, cwd: str):
+    def __init__(self, client: OpenAI, model: str, cwd: str,
+                 reasoning_effort: str = "default"):
         self.client = client
         self.model = model
         self.cwd = cwd
+        # ponytail: single OpenAI-standard knob; endpoints without reasoning
+        # simply ignore it — per-provider variant maps are a V2 idea
+        self.reasoning_effort = reasoning_effort
         self.auto_approve = False
         self.session_approved: set[str] = set()
         self.pending_approval: dict | None = None
@@ -75,11 +79,15 @@ class Agent:
             calls: dict = defaultdict(dict)
             call_order: list[int] = []
             try:
+                kwargs = {}
+                if self.reasoning_effort != "default":
+                    kwargs["reasoning_effort"] = self.reasoning_effort
                 stream = self.client.chat.completions.create(
                     model=self.model,
                     messages=messages,
                     tools=[tools.tool_schema()],
                     stream=True,
+                    **kwargs,
                 )
                 for chunk in stream:
                     if self.cancel_flag.is_set():
@@ -149,7 +157,7 @@ class Agent:
                     self.approval_event.wait()
                     decision_info = self.pending_approval or {"decision": "skip"}
                     if self.cancel_flag.is_set() or \
-                            decision_info["decision"] != "allow":
+                            decision_info["decision"] not in ("allow", "always"):
                         messages.append({"role": "tool",
                                          "tool_call_id": call_id,
                                          "content": "user skipped this command"})
