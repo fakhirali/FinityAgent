@@ -101,6 +101,8 @@ tool (bash) and responds with visual, interactive HTML.
       integrations can connect to those platforms
 - [ ] Point-and-add: click any element in an agent's HTML response to
       attach it (as a selector/element reference) to the prompt
+- [ ] Persist reasoning effort per conversation alongside the model
+      (currently global config only)
 - [ ] Long tool responses saved as files the agent can read (instead of
       only tail-capping output in context)
 - [ ] Long-term agent memory (persistent facts/preferences across
