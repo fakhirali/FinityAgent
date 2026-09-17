@@ -84,6 +84,8 @@ tool (bash) and responds with visual, interactive HTML.
 ## Not yet implemented
 
 ### Near-term
+- [ ] Long tool responses saved as files the agent can read (instead of
+      only tail-capping output in context)
 - [ ] Long-term agent memory (persistent facts/preferences across
       conversations, e.g. MEMORY.md the agent reads and updates)
 - [ ] Mobile-friendly interface (responsive layout / touch composer)
