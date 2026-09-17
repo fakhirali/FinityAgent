@@ -54,8 +54,8 @@ class Agent:
     def cancel(self) -> None:
         self.cancel_flag.set()
         tools.cancel(self.proc_holder)
-        if self.pending_approval is not None:
-            self.resolve_approval("skip")
+        # unblock a turn waiting on approval, if any
+        self.resolve_approval("skip")
 
     def _decide(self, command: str) -> str:
         if is_denied(command):
