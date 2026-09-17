@@ -88,6 +88,11 @@ tool (bash) and responds with visual, interactive HTML.
       conversation; agent processes them after the current turn finishes)
 - [ ] Compaction for context compression (summarize old turns into a
       compact summary to keep long sessions within the context window)
+- [ ] Links in agent HTML always open in a new tab (target=_blank, or
+      enforced platform-side)
+- [ ] Artifacts: persist agent HTML responses as named, editable objects
+      the user and agent can iterate on (like Claude artifacts), instead of
+      one-shot fragments
 - [ ] Long tool responses saved as files the agent can read (instead of
       only tail-capping output in context)
 - [ ] Long-term agent memory (persistent facts/preferences across
