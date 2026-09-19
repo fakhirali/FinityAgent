@@ -3,6 +3,24 @@
 Local agent harness, Python-only. Chat in the browser; agent has exactly one
 tool (bash) and responds with visual, interactive HTML.
 
+## General preferences
+
+### Web interface
+- Built with FastHTML + HTMX, used to the fullest (htmx events, partials, hx-swap, etc.)
+- Avoid standalone JS and CSS files as much as possible
+- If JS is unavoidable, use inline JS (e.g. Surreal.js)
+- Interface stays simple and effective
+
+### Agent design
+- The agent has a single tool: bash. No other tools.
+- The system prompt is where the versatility lives: it teaches unique ways to
+  use bash for different effects —
+  - scheduled workflows (cron via bash)
+  - serving files to the user (`/files/`)
+  - accessing skills and memory
+  - web search, data processing, background processes, etc.
+- The prompt also states what is not safe (deny-list behavior)
+
 ## Implemented (V1)
 
 ### Core
@@ -57,9 +75,10 @@ tool (bash) and responds with visual, interactive HTML.
 - [x] **`/files/` serving** — `~/.finityagent/files/` served at
       `/files/<name>`; symlinks supported (no copies for external files);
       `..` traversal blocked
-- [x] **`data-send` widget bridge** — `<form data-send>` and
-      `<button data-send='{json}'>` submit back as
-      `[widget response] {...}` user turns
+- [x] **htmx widget bridge** — `<button hx-post="/api/widget/<sid>"
+      hx-vals='{json}'>` and `<form hx-post="/api/widget/<sid">` submit
+      back as `[widget response] {...}` user turns; multi-step widgets
+      capture choices in an inline surreal.js script
 - [x] **Wider layout** — content spans ~1350px
 
 ### System prompt (restructured)
@@ -72,8 +91,10 @@ tool (bash) and responds with visual, interactive HTML.
   referenced as `/files/<name>`; never inline large datasets
 - Bash usage; Skills (~/.finityagent, ./.finityagent, ~/.claude/skills,
   ~/.agents/skills — SKILL.md + frontmatter)
-- Web search moved out of the prompt into a real skill
-  (`~/.finityagent/skills/websearch.md`, DuckDuckGo via curl, citations)
+- Web search moved out of the prompt into a real skill: the server now
+  seeds `~/.finityagent/skills/websearch.md` on startup if missing
+  (Bing scrape via curl — DuckDuckGo serves bots a CAPTCHA — plus the
+  DDG instant-answer API for quick facts, citations)
 
 ### Testing
 - [x] 57 pytest tests: config, permissions, tools, db, agent decisions
@@ -84,58 +105,87 @@ tool (bash) and responds with visual, interactive HTML.
 ## Not yet implemented
 
 ### Near-term
-- [ ] Queue messages while a turn is running (send into the running
+- [x] Queue messages while a turn is running (send into the running
       conversation; agent processes them after the current turn finishes)
-- [ ] Compaction for context compression (summarize old turns into a
+- [x] Compaction for context compression (summarize old turns into a
       compact summary to keep long sessions within the context window)
-- [ ] Links in agent HTML always open in a new tab (target=_blank, or
+- [x] Links in agent HTML always open in a new tab (target=_blank, or
       enforced platform-side)
-- [ ] Artifacts: persist agent HTML responses as named, editable objects
+- [x] Artifacts: persist agent HTML responses as named, editable objects
       the user and agent can iterate on (like Claude artifacts), instead of
       one-shot fragments
-- [ ] File uploads in the chat (drop files into the UI; agent gets the
+- [x] File uploads in the chat (drop files into the UI; agent gets the
       path, uploads land in ~/.finityagent/files/)
-- [ ] Platform env-var store (Hermes-style): agent can save credentials/
+- [x] Platform env-var store (Hermes-style): agent can save credentials/
       tokens for external platforms (e.g. TELEGRAM_TOKEN, GITHUB_TOKEN)
       into ~/.finityagent/.env, wired into the system prompt so agent-built
       integrations can connect to those platforms
 - [ ] Point-and-add: click any element in an agent's HTML response to
-      attach it (as a selector/element reference) to the prompt
-- [ ] Persist reasoning effort per conversation alongside the model
+      attach it (as a selector/element reference) to the prompt (removed
+      for now — revisit later)
+- [x] Persist reasoning effort per conversation alongside the model
       (currently global config only)
-- [ ] Long tool responses saved as files the agent can read (instead of
+- [x] Long tool responses saved as files the agent can read (instead of
       only tail-capping output in context)
-- [ ] Long-term agent memory (persistent facts/preferences across
+- [x] Long-term agent memory (persistent facts/preferences across
       conversations, e.g. MEMORY.md the agent reads and updates)
-- [ ] Mobile-friendly interface (responsive layout / touch composer)
-- [ ] Cronjobs and triggered tasks/workflows (scheduled agent runs,
+- [x] Mobile-friendly interface (responsive layout / touch composer)
+- [x] Scheduled agent runs via real cron: `finityagent --prompt "..." --session <id>`
+      injected into the running server; the agent creates cron entries itself
+      via bash (session ids listed by `finityagent sessions`, also in the
+      system prompt)
       event-triggered actions)
-- [ ] Hide (soft-delete) conversations from the sidebar
-- [ ] Stable header dropdowns: model/reasoning selects keep their value
+- [x] Hide (soft-delete) conversations from the sidebar
+- [x] Stable header dropdowns: model/reasoning selects keep their value
       without flashing blank while options load
-- [ ] Loading indicators in the conversation sidebar showing which
+- [x] Loading indicators in the conversation sidebar showing which
       conversations have a running agent
 - [ ] Overall UI polish pass
-- [ ] Improved skills access; user-initiated skills and slash commands
+- [x] Improved skills access; user-initiated skills and slash commands
       (e.g. `/skill: <name>`, custom commands)
-- [ ] Auto-send HTML render errors back to the agent so it can fix them
-- [ ] Background process facility (start/stop/monitor long-running
-      commands, e.g. dev servers)
-- [ ] Richer widget protocol: multi-step forms — submit fires only after
+- [x] Auto-send HTML render errors back to the agent so it can fix them
+- [x] Long-running commands handled by plain bash (`nohup CMD >file.log 2>&1
+      &` — detached, output in a file; results streamed back via
+      `finityagent --prompt --session`) — no special bg facility
+- [x] Richer widget protocol: multi-step forms — submit fires only after
       the user has selected all options / clicked submit, not per button
-- [ ] Web search as a first-class installable skill with per-provider
-      backends (SearXNG, Brave, Exa keys)
+- [x] Web search as a first-class installable skill with per-provider
+      backends (Bing no-key scrape + DDG instant answers bundled; SearXNG/Brave/Exa keys when needed) — bundled Bing-no-key + DDG-instant skill seeded at startup
 - [ ] Publish to PyPI (`uv tool install finityagent` path; currently
       repo-only install via `uv sync`)
-- [ ] Start-or-reattach: zero-arg invocation when a server already runs
+- [x] Start-or-reattach: zero-arg invocation when a server already runs
       on the port (currently errors on port conflict)
 
 ### Bugs
-- [ ] After a page refresh, replayed reasoning deltas update the first
+- [x] After a page refresh, replayed reasoning deltas update the first
       Thinking block instead of the last one (thinkingEl is not reset per
       replayed turn)
 
 ### Explore
+- Learning loop / self-nudges (agent-initiated, no harness subsystem):
+  - **Self-nudge via own CLI** — after a multi-turn task, the agent runs
+    `finityagent --prompt "Reflection: persist anything valuable..." --session <id>`
+    to spin a reflection turn on its own transcript. Policy ("nudge yourself
+    after complex tasks") is saved to MEMORY.md once and becomes standing
+    behavior. Delayed reflection via cron (sleep-on-it reviews, weekly audits).
+    Policy lives in memory/skills (data), mechanism lives in the harness —
+    behavior is programmable in natural language.
+  - **Tier 1 (zero harness change)** — agent-built listener: cron polling
+    `sessions.db` for new message ids; react via `--prompt --session` injection.
+    Deterministic but laggy; listener is just a background bash process.
+  - **Tier 2 (one tiny harness concession)** — `server.py` appends JSONL
+    lifecycle events (turn_started, turn_finished, tool_error, approval_denied,
+    compaction…) to `~/.finityagent/events.jsonl`; agent runs
+    `tail -f events.jsonl | python hooks/on_event.py` — a real event bus.
+    Hooks are files the agent owns and edits; nudges fire 100% of the time
+    (the event is the nudge, nothing relies on remembering).
+  - **Delivery** — seed a `hooks.md` skill (like websearch.md) teaching the
+    event format + listener conventions rather than writing harness code.
+  - **Caveats** — recursion (injected turn finishes → turn_finished event →
+    loop; skip rule: never react to handler-injected turns, e.g. `[reflection]`
+    marker), listener durability (PID lockfile, @reboot revive, log rotation),
+    listener bypasses per-command approval (deny list still applies to
+    injected turns), event log doubles as observational memory.
 - Give the agent access to (or the ability to create) backend endpoints,
   so generated apps can serve dynamic content beyond static HTML — e.g.
   agent-authored FastAPI routes mounted by the harness, server-side
@@ -156,12 +206,12 @@ tool (bash) and responds with visual, interactive HTML.
 
 | Area | Decision |
 |---|---|
-| Rendering | **Direct DOM** (was sandboxed iframe — dropped for seamlessness); agent fragments injected into `.agent-html` container, scripts IIFE-wrapped |
-| UI framework | FastHTML + Pico CSS (dark) + vanilla JS + HTMX for sidebar partials |
+| Rendering | **Direct DOM** (was sandboxed iframe — dropped for seamlessness); agent fragments injected into `.agent-html` container, scripts IIFE-wrapped server-side |
+| UI framework | FastHTML + Pico CSS (dark) + **HTMX everywhere + inline surreal.js** — no app.js; the whole UI is server-rendered, streaming is SSE events carrying HTML fragments with hx-swap-oob updates |
 | DB | fastlite over raw sqlite3 |
 | Files | Dedicated `~/.finityagent/files/` dir + symlinks, not the cwd |
 | Reasoning | Per-model options from models.dev; `reasoning_effort` param; traces displayed |
-| Streaming | Per-token SSE; POST/EventSource split; turns run server-side in threads |
+| Streaming | SSE extension; every event is a server-rendered HTML fragment (append or oob-swap) — htmx does all rendering |
 
 ## Project layout
 
@@ -179,7 +229,7 @@ finityagent/
 │   ├── config.py           # toml load/save, presets
 │   ├── db.py               # fastlite sessions/messages
 │   └── static/
-│       ├── app.js          # chat UI, EventSource, data-send bridge
+│       ├── app.js          # (removed — htmx + SSE + inline surreal)
 │       ├── wizard.js       # preset prefill + model dropdown
 │       └── style.css       # structural CSS on top of Pico
 └── tests/
