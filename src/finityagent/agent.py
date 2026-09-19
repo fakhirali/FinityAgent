@@ -198,6 +198,12 @@ class Agent:
                 return messages
 
             if not call_order:
+                if not assistant_text:
+                    # provider returned an empty stream — surface it instead
+                    # of a silently dead turn
+                    yield {"type": "error",
+                           "message": "empty response from provider"}
+                    return messages
                 yield {"type": "html_response", "html": assistant_text}
                 if assistant_text:
                     messages.append({"role": "assistant",

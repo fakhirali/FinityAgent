@@ -661,7 +661,7 @@ def _render_event(session_id: int, etype: str, event: dict) -> str:
         frag = _html_answer(mid, content)
         return (f'<div id="stream-bubble" hx-swap-oob="delete"></div>{frag}'
                 if had_stream else frag)
-    if etype == "error":
+    if etype in ("error", "agent_error"):
         t["stream_open"] = False
         t["stream_buf"] = ""
         return (f'<div class="msg stream-text">Error: '
