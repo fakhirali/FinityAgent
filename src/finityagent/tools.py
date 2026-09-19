@@ -4,12 +4,19 @@ import json
 import os
 import signal
 import subprocess
+import time
+from pathlib import Path
+
+from .config import FINITY_DIR
 
 DEFAULT_TIMEOUT = 120.0
 MAX_TIMEOUT = 600.0
 MAX_OUTPUT = 30_000
 
-TRUNCATION_NOTICE = "\n... [output truncated, showing last {} of {} chars]"
+# ponytail: long tool output is saved to one flat dir under the files root;
+# finer naming, if ever needed, is the agent's problem — it has the path
+LONG_OUTPUT_DIR = FINITY_DIR / "files"
+LONG_OUTPUT_LIMIT = 30_000
 
 
 class BashResult:
@@ -28,14 +35,20 @@ class BashResult:
 def _tail_cap(text: str) -> str:
     if len(text) <= MAX_OUTPUT:
         return text
-    notice = TRUNCATION_NOTICE.format(MAX_OUTPUT, len(text))
-    return text[-MAX_OUTPUT:] + notice
+    # save the full output where the agent can read it back
+    LONG_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    path = LONG_OUTPUT_DIR / f"output-{int(time.time() * 1000)}.txt"
+    path.write_text(text)
+    notice = (f"\n... [output truncated, full {len(text)} chars saved to "
+              "{}, read it with cat]")
+    return text.rstrip()[-MAX_OUTPUT:] + notice.format(f"~/.finityagent/files/{path.name}")
 
 
 def run_bash(command: str, cwd: str, timeout: float = DEFAULT_TIMEOUT,
              on_start=None, proc_holder: dict | None = None) -> BashResult:
     timeout = min(max(float(timeout), 1.0), MAX_TIMEOUT)
-    env = {**os.environ, "TERM": "dumb"}
+    from . import envstore
+    env = envstore.inject_into({**os.environ, "TERM": "dumb"})
     try:
         proc = subprocess.Popen(
             ["/bin/bash", "-c", command],
