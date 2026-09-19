@@ -267,9 +267,6 @@ def chat_shell(session_id: int, cfg: Config, cwd: str) -> tuple:
     running = bool(turns.get(session_id, {}).get("running"))
     body = (
         '<aside id="sidebar">'
-        '<button id="sidebar-toggle" type="button">☰'
-        '<script>me().on("click", _ => me("#sidebar").classToggle("open"))'
-        '</script></button>'
         '<a href="/"><button id="new-chat" type="button">+ New chat</button></a>'
         f'<ul id="session-list" hx-get="/api/sessions-list/{session_id}"'
         f' hx-trigger="load" hx-swap="innerHTML">{_session_lis(session_id)}</ul>'
@@ -277,6 +274,9 @@ def chat_shell(session_id: int, cfg: Config, cwd: str) -> tuple:
         f'<ul id="artifact-list">{_artifact_lis(session_id)}</ul>'
         '</aside>'
         '<main id="main">'
+        f'<button id="sidebar-toggle" type="button">☰'
+        f'<script>me().on("click", _ => me("#sidebar").classToggle("open"))'
+        f'</script></button>'
         f'{_topbar(session_id, cfg, sess)}'
         f'{_transcript(session_id)}'
         f'<form id="composer" hx-post="/api/chat/{session_id}"'
@@ -568,7 +568,9 @@ def _new_user_message(session_id: int, message: str) -> Response:
     # the composer's running state and the user bubble both travel over
     # the stream — every client (browser tab or CLI-injected turn) shows it
     turn["events"].append(("turn_start",
-                           f'<form id="composer" hx-swap-oob="true">'
+                           f'<form id="composer" hx-swap-oob="true" '
+                           f'hx-post="/api/chat/{session_id}" '
+                           f'hx-target="#transcript" hx-swap="beforeend">'
                            f'{_composer_inner(session_id, True)}</form>'))
     turn["events"].append(("user_message", _user_bubble(mid, message)))
     threading.Thread(target=_run_turn,
@@ -665,7 +667,9 @@ def _render_event(session_id: int, etype: str, event: dict) -> str:
         return (f'<div class="msg stream-text">Error: '
                 f'{_esc(event["message"])}</div>')
     if etype == "turn_complete":
-        return (f'<form id="composer" hx-swap-oob="true">'
+        return (f'<form id="composer" hx-swap-oob="true" '
+                f'hx-post="/api/chat/{session_id}" '
+                f'hx-target="#transcript" hx-swap="beforeend">'
                 f'{_composer_inner(session_id, False)}</form>'
                 f'<ul id="session-list" hx-swap-oob="true">'
                 f'{_session_lis(session_id)}</ul>'
