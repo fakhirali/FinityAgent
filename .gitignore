@@ -3,3 +3,8 @@ __pycache__/
 *.pyc
 .env
 .DS_Store
+.jupyter/
+.jupyter_ystore.db
+.ipynb_checkpoints/
+.sesskey
+.playwright-cli/
